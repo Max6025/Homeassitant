@@ -1,0 +1,234 @@
+blueprint:
+  name: Automatische Backups
+  description: |
+    Erstellt täglich Backups und bewahrt diese für eine konfigurierbare Zeitspanne auf. Je älter die Backups, desto seltener werden sie gespeichert.
+
+    Standardmäßig sind alle Backups vollständige Backups, mit Ausnahme der 3-stündlichen Backups, die nur die Konfiguration enthalten.
+
+    **Template-Variablen:**
+    - `name` — unten konfigurierter Backup-Name
+    - `password` — unten konfiguriertes Backup-Passwort
+    - `encrypted` — unten konfigurierter Verschlüsselungsstatus
+    - `keep_days` — Aufbewahrungsdauer des Backups in Tagen, je nach aktuellem Backup-Typ
+    - `backup_type` — aktuell erstellter Zeitplan, z. B. `daily`, `weekly`, `monthly`
+
+    **Hinweis: erfordert die benutzerdefinierte Integration [Auto Backup](https://jcwillox.github.io/hass-auto-backup).**
+  domain: automation
+  author: jcwillox
+  homeassistant:
+    min_version: 2024.6.0
+  input:
+    name_section:
+      name: Name-Vorlage
+      icon: mdi:rename-box
+      description: Überschreibt die für Backups verwendete Name-Vorlage
+      collapsed: true
+      input:
+        backup_name:
+          name: "Name-Vorlage für Backups"
+          description: |
+            Das Standardformat ist `TäglichesBackup: Montag, 2. Januar 2006`, oder bei aktivierten 3-stündlichen Backups (erweiterte Optionen) wird für diesen Typ `StündlichesBackup: Montag, 15:04 Uhr, 2. Januar 2006` verwendet.
+
+            Wenn du keine 3-stündlichen Backups verwendest, kann die Vorlage einfach `{{ backup_type | title }}Backup: {{ now().strftime("%A, %B %-d, %Y") }}` lauten.
+          default: |
+            {{ backup_type | title }}Backup: {{
+              now().strftime(
+                "%A, "
+                ~ iif(backup_type == "hourly", "%-I:%M %p, ", "")
+                ~ "%B %-d, %Y"
+              )
+            }}
+          selector:
+            template:
+    backup_time:
+      name: "Uhrzeit für die tägliche Backup-Erstellung"
+      default: "02:30:00"
+      selector:
+        time:
+    encrypted:
+      name: Verschlüsselt
+      description: |
+        Verwendet den integrierten Home Assistant Verschlüsselungsschlüssel als Passwort. Wenn deaktiviert, werden Backups unverschlüsselt gespeichert.
+      default: false
+      selector:
+        boolean: {}
+    backup_password:
+      name: "Backup-Passwort (Optional)"
+      default: ""
+      selector:
+        text:
+          type: password
+    enable_daily:
+      name: "Aktivieren: Tägliche Backups"
+      description: "Erstellt täglich ein Backup und bewahrt es eine Woche lang auf"
+      default: true
+      selector:
+        boolean:
+    enable_weekly:
+      name: "Aktivieren: Wöchentliche Backups"
+      description: "Erstellt wöchentlich ein Backup und bewahrt es einen Monat lang auf"
+      default: true
+      selector:
+        boolean:
+    enable_monthly:
+      name: "Aktivieren: Monatliche Backups"
+      description: "Erstellt monatlich ein Backup und bewahrt es ein Jahr lang auf"
+      default: true
+      selector:
+        boolean:
+    enable_yearly:
+      name: "Aktivieren: Jährliche Backups"
+      description: "Erstellt jährlich ein Backup und bewahrt es dauerhaft auf"
+      default: true
+      selector:
+        boolean:
+    advanced_section:
+      name: Erweiterte Optionen
+      icon: mdi:cog
+      description: "Optionen für erfahrene Nutzer, einschließlich der Möglichkeit, 3-stündliche Backups zu aktivieren."
+      collapsed: true
+      input:
+        enable_hourly:
+          name: "Aktivieren: Stündliche Backups"
+          description: "Erstellt alle 3 Stunden ein Backup und bewahrt es 2 Tage lang auf"
+          default: false
+          selector:
+            boolean:
+        use_action_hourly:
+          name: "Backup-Aktion nur für stündliche Backups verwenden"
+          description: "Andernfalls wird sie für alle Backup-Typen verwendet"
+          default: true
+          selector:
+            boolean:
+
+        backup_action:
+          name: "Backup-Aktion (Optional)"
+          description: |
+            Überschreibt optional die eingebaute Backup-Aktion mit einer benutzerdefinierten Aktion, um mehr Kontrolle darüber zu haben, was in jedem Backup enthalten ist.
+
+            Standardmäßig überschreibt dies nur die 3-stündlichen Backups, sodass diese nur die Konfiguration enthalten.
+          default:
+            - action: auto_backup.backup
+              metadata: {}
+              data:
+                name: "{{ name }}"
+                encrypted: "{{ encrypted }}"
+                password: "{{ password }}"
+                keep_days: "{{ keep_days }}"
+                include_folders:
+                  - config
+          selector:
+            action:
+
+        condition:
+          name: Bedingung (Optional)
+          description: Bedingung, die vor jeder Aktion geprüft wird
+          default: []
+          selector:
+            action: {}
+
+mode: single
+
+variables:
+  encrypted: !input encrypted
+  password: !input backup_password
+  enable_hourly: !input enable_hourly
+  enable_daily: !input enable_daily
+  enable_weekly: !input enable_weekly
+  enable_monthly: !input enable_monthly
+  enable_yearly: !input enable_yearly
+  use_action_hourly: !input use_action_hourly
+
+trigger:
+  - id: daily
+    platform: time
+    at: !input backup_time
+  - id: hourly
+    enabled: !input enable_hourly
+    platform: time_pattern
+    hours: "/3"
+
+condition: !input condition
+
+action:
+  - if:
+      condition: trigger
+      id: daily
+    then:
+      - choose:
+          ### JÄHRLICH ###
+          - conditions:
+              - "{{ enable_yearly }}"
+              - "{{ now().day == 1 and now().month == 1 }}"
+            sequence:
+              - variables:
+                  backup_type: yearly
+                  keep_days: null
+              - &vars
+                variables:
+                  name: !input backup_name
+                  backup_action: !input backup_action
+              - &action
+                if:
+                  - "{{ not use_action_hourly }}"
+                  - "{{ backup_action | length > 0 }}"
+                then: !input backup_action
+                else:
+                  - alias: "Vollständiges Backup erstellen (Standardaktion)"
+                    service: auto_backup.backup
+                    data:
+                      name: "{{ name }}"
+                      encrypted: "{{ encrypted }}"
+                      password: "{{ password }}"
+                      keep_days: "{{ keep_days }}"
+
+          ### MONATLICH ###
+          - conditions:
+              - "{{ enable_monthly }}"
+              - "{{ now().day == 1 }}"
+            sequence:
+              - variables:
+                  backup_type: monthly
+                  keep_days: 365
+              - *vars
+              - *action
+
+          ### WÖCHENTLICH ###
+          - conditions:
+              - "{{ enable_weekly }}"
+              - "{{ now().weekday() == 0 }}"
+            sequence:
+              - variables:
+                  backup_type: weekly
+                  keep_days: 30.4167
+              - *vars
+              - *action
+
+          ### TÄGLICH ###
+          - conditions:
+              - "{{ enable_daily }}"
+            sequence:
+              - variables:
+                  backup_type: daily
+                  keep_days: 7
+              - *vars
+              - *action
+
+    ### STÜNDLICH ###
+    else:
+      - variables:
+          backup_type: hourly
+          keep_days: 2
+      - *vars
+      - if: "{{ backup_action | length > 0 }}"
+        then: !input backup_action
+        else:
+          - alias: "Teilweise Backup erstellen (Standardaktion)"
+            service: auto_backup.backup
+            data:
+              name: "{{ name }}"
+              encrypted: "{{ encrypted }}"
+              password: "{{ password }}"
+              keep_days: "{{ keep_days }}"
+              include_folders:
+                - config
