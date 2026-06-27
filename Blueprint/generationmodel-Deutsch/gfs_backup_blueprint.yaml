@@ -3,195 +3,269 @@ blueprint:
   description: >
     ## 💾 GFS Backup – 4 Ebenen (kein Addon nötig)
 
-    Erstellt Backups über den **nativen HA Netzwerk-Speicher** (CIFS/Samba).
-    Voraussetzung: Netzwerk-Speicher unter Einstellungen → System → Speicher eingerichtet.
+    Erstellt Backups über den **nativen HA Backup-Service**.
+    Netzwerk-Speicher (NAS) wird automatisch bespielt wenn er unter
+    Einstellungen → System → Speicher eingerichtet ist.
 
     ### Backup-Ebenen
 
-    | Ebene        | Rhythmus   | Aufbewahrung |
-    |--------------|------------|--------------|
-    | 🟢 Sohn      | Täglich    | 7 Tage       |
-    | 🔵 Vater     | Wöchentlich| 4 Wochen     |
-    | 🟣 Großvater | Monatlich  | 12 Monate    |
-    | 🔴 Urgroßvater | Jährlich | 2 Jahre      |
+    | Ebene          | Rhythmus    | Aufbewahrung |
+    |----------------|-------------|--------------|
+    | 🟢 Sohn        | Täglich     | einstellbar  |
+    | 🔵 Vater       | Wöchentlich | einstellbar  |
+    | 🟣 Großvater   | Monatlich   | einstellbar  |
+    | 🔴 Urgroßvater | Jährlich    | einstellbar  |
+
+    ### Lokales Löschen
+    Pro Ebene einstellbar ob das Backup nach dem Erstellen
+    lokal gelöscht wird (NAS bleibt Primärkopie) oder lokal bleibt.
 
     ### Optionale Helfer-Buttons
-    Jedem Backup kann ein `input_button`-Helfer zugewiesen werden –
-    bei Betätigung wird das jeweilige Backup sofort manuell ausgelöst.
+    Pro Ebene kann ein `input_button`-Helfer zugewiesen werden
+    für manuellen sofortigen Trigger.
+
+    ### Voraussetzung
+    HA 2024.11+ für automatische Netzwerk-Speicher-Synchronisation.
 
   domain: automation
   input:
 
-    # ── Zeitpläne ─────────────────────────────────────────────────
-    time_daily:
-      name: "Uhrzeit – Täglich (Sohn)"
-      default: "03:00:00"
-      selector:
-        time:
+    # ══════════════════════════════════════════════════════════════
+    # SOHN – TÄGLICH
+    # ══════════════════════════════════════════════════════════════
+    daily_section:
+      name: "🟢 Sohn – Täglich"
+      icon: mdi:calendar-today
+      collapsed: false
+      input:
 
-    time_weekly:
-      name: "Uhrzeit – Wöchentlich (Vater)"
-      default: "04:00:00"
-      selector:
-        time:
+        time_daily:
+          name: "Uhrzeit"
+          default: "03:00:00"
+          selector:
+            time:
 
-    weekday_weekly:
-      name: "Wochentag – Wöchentlich"
-      default: sun
-      selector:
-        select:
-          options:
-            - label: Montag
-              value: mon
-            - label: Dienstag
-              value: tue
-            - label: Mittwoch
-              value: wed
-            - label: Donnerstag
-              value: thu
-            - label: Freitag
-              value: fri
-            - label: Samstag
-              value: sat
-            - label: Sonntag
-              value: sun
+        keep_daily:
+          name: "Aufbewahrung lokal"
+          description: "Wie viele tägliche Backups lokal behalten?"
+          default: 7
+          selector:
+            number:
+              min: 1
+              max: 30
+              unit_of_measurement: Stück
+              mode: slider
 
-    time_monthly:
-      name: "Uhrzeit – Monatlich (Großvater)"
-      default: "05:00:00"
-      selector:
-        time:
+        delete_local_daily:
+          name: "Lokal löschen nach Upload"
+          description: "Backup nach dem Erstellen lokal löschen (NAS behält die Kopie)"
+          default: false
+          selector:
+            boolean:
 
-    day_monthly:
-      name: "Tag des Monats – Monatlich"
-      description: "1–28, wann soll das monatliche Backup laufen?"
-      default: 1
-      selector:
-        number:
-          min: 1
-          max: 28
-          mode: box
+        button_daily:
+          name: "Helfer-Button (optional)"
+          description: "input_button für manuellen Trigger – leer lassen wenn nicht gewünscht"
+          default:
+          selector:
+            entity:
+              domain: input_button
 
-    time_yearly:
-      name: "Uhrzeit – Jährlich (Urgroßvater)"
-      default: "06:00:00"
-      selector:
-        time:
+    # ══════════════════════════════════════════════════════════════
+    # VATER – WÖCHENTLICH
+    # ══════════════════════════════════════════════════════════════
+    weekly_section:
+      name: "🔵 Vater – Wöchentlich"
+      icon: mdi:calendar-week
+      collapsed: true
+      input:
 
-    day_yearly:
-      name: "Tag – Jährlich"
-      description: "Tag des Monats für das Jahres-Backup (1–28)"
-      default: 1
-      selector:
-        number:
-          min: 1
-          max: 28
-          mode: box
+        time_weekly:
+          name: "Uhrzeit"
+          default: "04:00:00"
+          selector:
+            time:
 
-    month_yearly:
-      name: "Monat – Jährlich"
-      default: 1
-      selector:
-        select:
-          options:
-            - label: Januar
-              value: "1"
-            - label: Februar
-              value: "2"
-            - label: März
-              value: "3"
-            - label: April
-              value: "4"
-            - label: Mai
-              value: "5"
-            - label: Juni
-              value: "6"
-            - label: Juli
-              value: "7"
-            - label: August
-              value: "8"
-            - label: September
-              value: "9"
-            - label: Oktober
-              value: "10"
-            - label: November
-              value: "11"
-            - label: Dezember
-              value: "12"
+        weekday_weekly:
+          name: "Wochentag"
+          default: sun
+          selector:
+            select:
+              options:
+                - label: Montag
+                  value: mon
+                - label: Dienstag
+                  value: tue
+                - label: Mittwoch
+                  value: wed
+                - label: Donnerstag
+                  value: thu
+                - label: Freitag
+                  value: fri
+                - label: Samstag
+                  value: sat
+                - label: Sonntag
+                  value: sun
 
-    # ── Aufbewahrung ──────────────────────────────────────────────
-    keep_daily:
-      name: "Aufbewahrung – Täglich"
-      default: 7
-      selector:
-        number:
-          min: 1
-          max: 30
-          unit_of_measurement: Tage
-          mode: slider
+        keep_weekly:
+          name: "Aufbewahrung lokal"
+          description: "Wie viele wöchentliche Backups lokal behalten?"
+          default: 4
+          selector:
+            number:
+              min: 1
+              max: 12
+              unit_of_measurement: Stück
+              mode: slider
 
-    keep_weekly:
-      name: "Aufbewahrung – Wöchentlich"
-      default: 4
-      selector:
-        number:
-          min: 1
-          max: 12
-          unit_of_measurement: Wochen
-          mode: slider
+        delete_local_weekly:
+          name: "Lokal löschen nach Upload"
+          description: "Backup nach dem Erstellen lokal löschen (NAS behält die Kopie)"
+          default: false
+          selector:
+            boolean:
 
-    keep_monthly:
-      name: "Aufbewahrung – Monatlich"
-      default: 12
-      selector:
-        number:
-          min: 1
-          max: 24
-          unit_of_measurement: Monate
-          mode: slider
+        button_weekly:
+          name: "Helfer-Button (optional)"
+          description: "input_button für manuellen Trigger – leer lassen wenn nicht gewünscht"
+          default:
+          selector:
+            entity:
+              domain: input_button
 
-    keep_yearly:
-      name: "Aufbewahrung – Jährlich"
-      default: 2
-      selector:
-        number:
-          min: 1
-          max: 10
-          unit_of_measurement: Jahre
-          mode: slider
+    # ══════════════════════════════════════════════════════════════
+    # GROSSVATER – MONATLICH
+    # ══════════════════════════════════════════════════════════════
+    monthly_section:
+      name: "🟣 Großvater – Monatlich"
+      icon: mdi:calendar-month
+      collapsed: true
+      input:
 
-    # ── Optionale Helfer-Buttons ──────────────────────────────────
-    button_daily:
-      name: "Helfer-Button – Täglich (optional)"
-      description: "input_button Helfer für manuellen täglichen Trigger. Leer lassen wenn nicht gewünscht."
-      default:
-      selector:
-        entity:
-          domain: input_button
+        time_monthly:
+          name: "Uhrzeit"
+          default: "05:00:00"
+          selector:
+            time:
 
-    button_weekly:
-      name: "Helfer-Button – Wöchentlich (optional)"
-      description: "input_button Helfer für manuellen wöchentlichen Trigger. Leer lassen wenn nicht gewünscht."
-      default:
-      selector:
-        entity:
-          domain: input_button
+        day_monthly:
+          name: "Tag des Monats"
+          description: "An welchem Tag soll das monatliche Backup laufen? (1–28)"
+          default: 1
+          selector:
+            number:
+              min: 1
+              max: 28
+              mode: box
 
-    button_monthly:
-      name: "Helfer-Button – Monatlich (optional)"
-      description: "input_button Helfer für manuellen monatlichen Trigger. Leer lassen wenn nicht gewünscht."
-      default:
-      selector:
-        entity:
-          domain: input_button
+        keep_monthly:
+          name: "Aufbewahrung lokal"
+          description: "Wie viele monatliche Backups lokal behalten?"
+          default: 12
+          selector:
+            number:
+              min: 1
+              max: 24
+              unit_of_measurement: Stück
+              mode: slider
 
-    button_yearly:
-      name: "Helfer-Button – Jährlich (optional)"
-      description: "input_button Helfer für manuellen jährlichen Trigger. Leer lassen wenn nicht gewünscht."
-      default:
-      selector:
-        entity:
-          domain: input_button
+        delete_local_monthly:
+          name: "Lokal löschen nach Upload"
+          description: "Backup nach dem Erstellen lokal löschen (NAS behält die Kopie)"
+          default: false
+          selector:
+            boolean:
+
+        button_monthly:
+          name: "Helfer-Button (optional)"
+          description: "input_button für manuellen Trigger – leer lassen wenn nicht gewünscht"
+          default:
+          selector:
+            entity:
+              domain: input_button
+
+    # ══════════════════════════════════════════════════════════════
+    # URGROSSVATER – JÄHRLICH
+    # ══════════════════════════════════════════════════════════════
+    yearly_section:
+      name: "🔴 Urgroßvater – Jährlich"
+      icon: mdi:calendar-star
+      collapsed: true
+      input:
+
+        time_yearly:
+          name: "Uhrzeit"
+          default: "06:00:00"
+          selector:
+            time:
+
+        day_yearly:
+          name: "Tag des Monats"
+          description: "An welchem Tag soll das Jahres-Backup laufen? (1–28)"
+          default: 1
+          selector:
+            number:
+              min: 1
+              max: 28
+              mode: box
+
+        month_yearly:
+          name: "Monat"
+          description: "In welchem Monat soll das Jahres-Backup laufen?"
+          default: "1"
+          selector:
+            select:
+              options:
+                - label: Januar
+                  value: "1"
+                - label: Februar
+                  value: "2"
+                - label: März
+                  value: "3"
+                - label: April
+                  value: "4"
+                - label: Mai
+                  value: "5"
+                - label: Juni
+                  value: "6"
+                - label: Juli
+                  value: "7"
+                - label: August
+                  value: "8"
+                - label: September
+                  value: "9"
+                - label: Oktober
+                  value: "10"
+                - label: November
+                  value: "11"
+                - label: Dezember
+                  value: "12"
+
+        keep_yearly:
+          name: "Aufbewahrung lokal"
+          description: "Wie viele Jahres-Backups lokal behalten?"
+          default: 2
+          selector:
+            number:
+              min: 1
+              max: 10
+              unit_of_measurement: Stück
+              mode: slider
+
+        delete_local_yearly:
+          name: "Lokal löschen nach Upload"
+          description: "Backup nach dem Erstellen lokal löschen (NAS behält die Kopie)"
+          default: false
+          selector:
+            boolean:
+
+        button_yearly:
+          name: "Helfer-Button (optional)"
+          description: "input_button für manuellen Trigger – leer lassen wenn nicht gewünscht"
+          default:
+          selector:
+            entity:
+              domain: input_button
 
 # ── Variablen ─────────────────────────────────────────────────────
 variables:
@@ -202,6 +276,10 @@ variables:
   var_keep_weekly: !input keep_weekly
   var_keep_monthly: !input keep_monthly
   var_keep_yearly: !input keep_yearly
+  var_delete_daily: !input delete_local_daily
+  var_delete_weekly: !input delete_local_weekly
+  var_delete_monthly: !input delete_local_monthly
+  var_delete_yearly: !input delete_local_yearly
   var_button_daily: !input button_daily
   var_button_weekly: !input button_weekly
   var_button_monthly: !input button_monthly
@@ -263,6 +341,14 @@ action:
             data:
               keep_last: "{{ var_keep_daily | int }}"
               name_filter: "HA-Daily-"
+          - if:
+              - condition: template
+                value_template: "{{ var_delete_daily }}"
+            then:
+              - action: backup.delete
+                data:
+                  keep_last: 0
+                  name_filter: "HA-Daily-{{ now().strftime('%Y-%m-%d') }}"
 
       # ── VATER: Wöchentlich ────────────────────────────────────
       - conditions:
@@ -287,6 +373,14 @@ action:
             data:
               keep_last: "{{ var_keep_weekly | int }}"
               name_filter: "HA-Weekly-"
+          - if:
+              - condition: template
+                value_template: "{{ var_delete_weekly }}"
+            then:
+              - action: backup.delete
+                data:
+                  keep_last: 0
+                  name_filter: "HA-Weekly-{{ now().strftime('%Y-%m-%d') }}"
 
       # ── GROSSVATER: Monatlich ─────────────────────────────────
       - conditions:
@@ -310,6 +404,14 @@ action:
             data:
               keep_last: "{{ var_keep_monthly | int }}"
               name_filter: "HA-Monthly-"
+          - if:
+              - condition: template
+                value_template: "{{ var_delete_monthly }}"
+            then:
+              - action: backup.delete
+                data:
+                  keep_last: 0
+                  name_filter: "HA-Monthly-{{ now().strftime('%Y-%m') }}"
 
       # ── URGROSSVATER: Jährlich ────────────────────────────────
       - conditions:
@@ -335,6 +437,14 @@ action:
             data:
               keep_last: "{{ var_keep_yearly | int }}"
               name_filter: "HA-Yearly-"
+          - if:
+              - condition: template
+                value_template: "{{ var_delete_yearly }}"
+            then:
+              - action: backup.delete
+                data:
+                  keep_last: 0
+                  name_filter: "HA-Yearly-{{ now().strftime('%Y') }}"
 
 mode: parallel
 max: 4
