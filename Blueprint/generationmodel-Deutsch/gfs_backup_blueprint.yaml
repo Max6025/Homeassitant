@@ -1,0 +1,245 @@
+blueprint:
+  name: "GFS Backup (Großvater-Vater-Sohn) mit Samba"
+  description: >
+    Großvater-Vater-Sohn Backup-Strategie über das Samba Backup Add-on.
+    Täglich (Sohn), wöchentlich (Vater) und monatlich (Großvater) –
+    alles in einem Blueprint einstellbar. Benötigt das Add-on "Samba Backup".
+  domain: automation
+  input:
+
+    # ── NAS / Samba ────────────────────────────────────────────────
+    nas_host:
+      name: NAS IP-Adresse
+      description: IP-Adresse deines NAS (z. B. 192.168.178.50)
+      selector:
+        text:
+          type: text
+
+    nas_share:
+      name: Freigabe-Name
+      description: Name der Samba-Freigabe auf dem NAS (z. B. Backups)
+      selector:
+        text:
+          type: text
+
+    nas_username:
+      name: Benutzername (optional)
+      description: Samba-Benutzername – leer lassen wenn nicht benötigt
+      default: ""
+      selector:
+        text:
+          type: text
+
+    nas_password:
+      name: Passwort (optional)
+      description: Samba-Passwort – leer lassen wenn nicht benötigt
+      default: ""
+      selector:
+        text:
+          type: password
+
+    # ── Ordner auf dem NAS ────────────────────────────────────────
+    dir_daily:
+      name: "Ordner – Täglich (Sohn)"
+      description: Unterordner auf dem NAS für tägliche Backups
+      default: "ha_daily"
+      selector:
+        text:
+          type: text
+
+    dir_weekly:
+      name: "Ordner – Wöchentlich (Vater)"
+      description: Unterordner auf dem NAS für wöchentliche Backups
+      default: "ha_weekly"
+      selector:
+        text:
+          type: text
+
+    dir_monthly:
+      name: "Ordner – Monatlich (Großvater)"
+      description: Unterordner auf dem NAS für monatliche Backups
+      default: "ha_monthly"
+      selector:
+        text:
+          type: text
+
+    # ── Zeitpläne ─────────────────────────────────────────────────
+    time_daily:
+      name: "Uhrzeit – Täglich"
+      description: Um wie viel Uhr soll das tägliche Backup starten?
+      default: "03:00:00"
+      selector:
+        time:
+
+    time_weekly:
+      name: "Uhrzeit – Wöchentlich"
+      description: Um wie viel Uhr soll das wöchentliche Backup starten?
+      default: "04:00:00"
+      selector:
+        time:
+
+    weekday_weekly:
+      name: "Wochentag – Wöchentlich"
+      description: An welchem Wochentag soll das wöchentliche Backup laufen?
+      default: sun
+      selector:
+        select:
+          options:
+            - label: Montag
+              value: mon
+            - label: Dienstag
+              value: tue
+            - label: Mittwoch
+              value: wed
+            - label: Donnerstag
+              value: thu
+            - label: Freitag
+              value: fri
+            - label: Samstag
+              value: sat
+            - label: Sonntag
+              value: sun
+
+    time_monthly:
+      name: "Uhrzeit – Monatlich"
+      description: Um wie viel Uhr soll das monatliche Backup starten?
+      default: "05:00:00"
+      selector:
+        time:
+
+    day_monthly:
+      name: "Tag des Monats – Monatlich"
+      description: Am wievielten Tag des Monats soll das monatliche Backup laufen? (1–28)
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 28
+          mode: box
+
+    # ── Aufbewahrung ──────────────────────────────────────────────
+    keep_daily:
+      name: "Aufbewahrung – Täglich"
+      description: Wie viele tägliche Backups sollen auf dem NAS behalten werden?
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 30
+          unit_of_measurement: Tage
+          mode: slider
+
+    keep_weekly:
+      name: "Aufbewahrung – Wöchentlich"
+      description: Wie viele wöchentliche Backups sollen behalten werden?
+      default: 4
+      selector:
+        number:
+          min: 1
+          max: 12
+          unit_of_measurement: Wochen
+          mode: slider
+
+    keep_monthly:
+      name: "Aufbewahrung – Monatlich"
+      description: Wie viele monatliche Backups sollen behalten werden?
+      default: 12
+      selector:
+        number:
+          min: 1
+          max: 24
+          unit_of_measurement: Monate
+          mode: slider
+
+    keep_local:
+      name: "Lokale Kopien behalten"
+      description: Wie viele Backups sollen lokal auf Home Assistant behalten werden?
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 5
+          mode: box
+
+# ── Trigger ───────────────────────────────────────────────────────
+trigger:
+  - platform: time
+    at: !input time_daily
+    id: trigger_daily
+
+  - platform: time
+    at: !input time_weekly
+    id: trigger_weekly
+
+  - platform: time
+    at: !input time_monthly
+    id: trigger_monthly
+
+# ── Variablen (für Template-Zugriff auf !input) ───────────────────
+variables:
+  var_day_monthly: !input day_monthly
+
+# ── Aktionen ──────────────────────────────────────────────────────
+action:
+  - choose:
+
+      # ── SOHN: Täglich ─────────────────────────────────────────
+      - conditions:
+          - condition: trigger
+            id: trigger_daily
+        sequence:
+          - action: hassio.addon_stdin
+            data:
+              addon: core_samba_backup
+              input:
+                host: !input nas_host
+                share: !input nas_share
+                username: !input nas_username
+                password: !input nas_password
+                target_dir: !input dir_daily
+                keep_local: !input keep_local
+                keep_remote: !input keep_daily
+                backup_name: "HA-Daily-{date}"
+
+      # ── VATER: Wöchentlich ────────────────────────────────────
+      - conditions:
+          - condition: trigger
+            id: trigger_weekly
+          - condition: time
+            weekday:
+              - !input weekday_weekly
+        sequence:
+          - action: hassio.addon_stdin
+            data:
+              addon: core_samba_backup
+              input:
+                host: !input nas_host
+                share: !input nas_share
+                username: !input nas_username
+                password: !input nas_password
+                target_dir: !input dir_weekly
+                keep_local: !input keep_local
+                keep_remote: !input keep_weekly
+                backup_name: "HA-Weekly-{date}"
+
+      # ── GROSSVATER: Monatlich ─────────────────────────────────
+      - conditions:
+          - condition: trigger
+            id: trigger_monthly
+          - condition: template
+            value_template: "{{ now().day == var_day_monthly | int }}"
+        sequence:
+          - action: hassio.addon_stdin
+            data:
+              addon: core_samba_backup
+              input:
+                host: !input nas_host
+                share: !input nas_share
+                username: !input nas_username
+                password: !input nas_password
+                target_dir: !input dir_monthly
+                keep_local: !input keep_local
+                keep_remote: !input keep_monthly
+                backup_name: "HA-Monthly-{date}"
+
+mode: single
